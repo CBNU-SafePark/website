@@ -18,7 +18,7 @@ app = Flask(__name__)
 CORS(app)  # Next.js와의 CORS 문제 해결
 
 class CameraStream:
-    def __init__(self, camera_index=0, resolution=(640, 480), fps=30):
+    def __init__(self, camera_index=0, resolution=(1280, 720), fps=30):
         self.camera_index = camera_index
         self.resolution = resolution
         self.fps = fps
@@ -140,7 +140,7 @@ def create_no_camera_frame():
     frame = cv2.imread('/dev/null', cv2.IMREAD_COLOR)
     if frame is None:
         # 검은 화면 생성
-        frame = cv2.zeros((480, 640, 3), dtype=cv2.uint8)
+        frame = cv2.zeros((720, 1280, 3), dtype=cv2.uint8)
     
     # 메시지 추가
     cv2.putText(frame, "Camera not connected", (150, 200), 
