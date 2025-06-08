@@ -1,5 +1,26 @@
 // API 클라이언트 - FastAPI 서버에서 초음파 센서 데이터를 가져온다
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+// 임시로 localhost로 고정 (io_server가 127.0.0.1:8000에서만 listen하고 있음)
+const getApiBaseUrl = () => {
+  if (typeof window !== 'undefined') {
+    // 브라우저 환경에서는 현재 호스트를 사용
+    const hostname = window.location.hostname
+    return `http://${hostname}:8000`
+  }
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+}
+
+const API_BASE_URL = getApiBaseUrl()
+
+// parking_web_server API URL (포트 5000) - 브라우저 환경에서 동적으로 설정
+const getParkingApiBaseUrl = () => {
+  if (typeof window !== 'undefined') {
+    // 브라우저 환경에서는 현재 호스트를 사용
+    const hostname = window.location.hostname
+    return `http://${hostname}:5000`
+  }
+  // 서버 환경에서는 환경변수 또는 기본값 사용
+  return process.env.NEXT_PUBLIC_PARKING_API_URL || 'http://localhost:5000'
+}
 
 export interface UltrasonicSensorData {
   id: number
@@ -10,6 +31,33 @@ export interface UltrasonicSensorData {
   zone: string
   threshold: number
   battery: number
+}
+
+// 주차구역 데이터 타입
+export interface ParkingSpotData {
+  id: number
+  occupied: boolean
+  vehicle_id: string | null
+  vehicle_color: string | null
+}
+
+// parking_web_server에서 받는 상태 데이터 타입
+export interface ParkingSystemStatus {
+  status: 'active' | 'inactive'
+  resolution: string
+  fps: number
+  frame_count: number
+  total_vehicles: number
+  vehicle_counts: {
+    blue: number
+    yellow: number
+    white: number
+  }
+  parking_status: ParkingSpotData[]
+  active_warnings: number
+  warnings: any[]
+  current_time: string
+  gpio_available: boolean
 }
 
 // 더미 데이터 - API 호출 실패시 사용
@@ -55,6 +103,20 @@ const dummyData: UltrasonicSensorData[] = [
     battery: 65,
   },
 ]
+
+// 더미 주차 데이터 - parking API 호출 실패시 사용
+const dummyParkingData = {
+  zoneA: {
+    total: 4,
+    occupied: 3,
+    spaces: [true, true, true, false], // true = 주차됨, false = 비어있음
+  },
+  zoneB: {
+    total: 4,
+    occupied: 2,
+    spaces: [true, false, true, false],
+  },
+}
 
 // 개별 센서 데이터 가져오기
 async function fetchSensorData(sensorIndex: number): Promise<{ distance: number } | null> {
@@ -103,6 +165,52 @@ async function fetchSystemStatus(): Promise<any | null> {
   }
 }
 
+// parking_web_server에서 주차 시스템 상태 가져오기
+async function fetchParkingSystemStatus(): Promise<ParkingSystemStatus | null> {
+  try {
+    const response = await fetch(`${getParkingApiBaseUrl()}/status`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: AbortSignal.timeout(5000),
+    })
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    return data
+  } catch (error) {
+    console.warn('주차 시스템 상태 조회 실패:', error)
+    return null
+  }
+}
+
+// parking_web_server에서 주차구역 데이터 가져오기
+async function fetchParkingSpots(): Promise<ParkingSpotData[] | null> {
+  try {
+    const response = await fetch(`${getParkingApiBaseUrl()}/api/parking_spots`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: AbortSignal.timeout(5000),
+    })
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    return data
+  } catch (error) {
+    console.warn('주차구역 데이터 조회 실패:', error)
+    return null
+  }
+}
+
 // 초음파 센서 데이터 가져오기 (메인 함수)
 export async function fetchUltrasonicSensors(): Promise<{ 
   sensors: UltrasonicSensorData[], 
@@ -128,7 +236,7 @@ export async function fetchUltrasonicSensors(): Promise<{
         const liveData = sensorResults[index]
         if (liveData) {
           const distance = liveData.distance
-          const status = distance < sensor.threshold ? 'occupied' : 'normal'
+          const status: 'normal' | 'occupied' | 'error' = distance < sensor.threshold ? 'occupied' : 'normal'
           return {
             ...sensor,
             distance,
@@ -153,6 +261,67 @@ export async function fetchUltrasonicSensors(): Promise<{
     console.error('센서 데이터 조회 중 오류:', error)
     return {
       sensors: dummyData,
+      isLiveData: false
+    }
+  }
+}
+
+// 주차장 데이터 가져오기 (메인 함수)
+export async function fetchParkingData(): Promise<{
+  parkingData: any,
+  isLiveData: boolean,
+  systemStatus?: ParkingSystemStatus
+}> {
+  try {
+    // parking_web_server에서 데이터 가져오기
+    const [systemStatus, parkingSpots] = await Promise.all([
+      fetchParkingSystemStatus(),
+      fetchParkingSpots()
+    ])
+    
+    if (systemStatus && parkingSpots) {
+      // 실시간 데이터를 변환해서 기존 형식에 맞게 가공
+      const zoneA = {
+        total: 4,
+        occupied: 0,
+        spaces: [false, false, false, false]
+      }
+      
+      const zoneB = {
+        total: 4,
+        occupied: 0,
+        spaces: [false, false, false, false]
+      }
+      
+      // 주차구역 1-4는 A구역, 5-8은 B구역으로 매핑
+      parkingSpots.forEach((spot) => {
+        if (spot.id >= 1 && spot.id <= 4) {
+          // A구역
+          zoneA.spaces[spot.id - 1] = spot.occupied
+          if (spot.occupied) zoneA.occupied++
+        } else if (spot.id >= 5 && spot.id <= 8) {
+          // B구역
+          zoneB.spaces[spot.id - 5] = spot.occupied
+          if (spot.occupied) zoneB.occupied++
+        }
+      })
+      
+      return {
+        parkingData: { zoneA, zoneB },
+        isLiveData: true,
+        systemStatus
+      }
+    } else {
+      // API 호출 실패시 더미 데이터 반환
+      return {
+        parkingData: dummyParkingData,
+        isLiveData: false
+      }
+    }
+  } catch (error) {
+    console.error('주차장 데이터 조회 중 오류:', error)
+    return {
+      parkingData: dummyParkingData,
       isLiveData: false
     }
   }

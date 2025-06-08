@@ -61,7 +61,7 @@ export default function UltrasonicPage() {
           bgColor: "bg-red-50",
           borderColor: "border-red-200",
           label: "차량 감지",
-          description: `${Math.round(distance)}cm - 차량이 감지되었다`,
+          description: `${Math.round(distance)}cm - 차량 감지`,
         }
       case "normal":
         return {

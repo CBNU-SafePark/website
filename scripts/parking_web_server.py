@@ -28,7 +28,19 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app)
+# CORS 설정 - 모든 origin에서 접근 허용
+CORS(app, resources={
+    r"/api/*": {
+        "origins": "*",
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    },
+    r"/status": {
+        "origins": "*",
+        "methods": ["GET", "OPTIONS"],
+        "allow_headers": ["Content-Type"]
+    }
+})
 
 class ParkingTrackerWebServer:
     def __init__(self, camera_index=0, resolution=(1280, 720), fps=20):

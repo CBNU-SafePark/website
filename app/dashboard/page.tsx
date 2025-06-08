@@ -2,13 +2,17 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Car, Users, AlertTriangle, CheckCircle, Thermometer, Droplets, Activity, Clock } from "lucide-react"
+import { Car, Users, AlertTriangle, CheckCircle, Thermometer, Droplets, Activity, Clock, Wifi, WifiOff } from "lucide-react"
 import { useState, useEffect } from "react"
+import { fetchParkingData, ParkingSystemStatus } from "@/lib/api"
 
 export default function DashboardPage() {
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleString("ko-KR"))
+  const [isLoading, setIsLoading] = useState(true)
+  const [isLiveData, setIsLiveData] = useState(false)
+  const [systemStatus, setSystemStatus] = useState<ParkingSystemStatus | null>(null)
 
-  // 실제 앱에서는 이 값들이 실시간으로 업데이트될 것입니다
+  // 주차 데이터 상태
   const [parkingData, setParkingData] = useState({
     zoneA: {
       total: 4,
@@ -22,14 +26,42 @@ export default function DashboardPage() {
     },
   })
 
-  // 시간 업데이트 시뮬레이션
+  // 주차 데이터 가져오기 함수
+  const loadParkingData = async () => {
+    try {
+      setIsLoading(true)
+      const { parkingData: data, isLiveData: live, systemStatus: status } = await fetchParkingData()
+      setParkingData(data)
+      setIsLiveData(live)
+      setSystemStatus(status || null)
+    } catch (error) {
+      console.error('주차 데이터 로드 실패:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // 컴포넌트 마운트 시 초기 데이터 로드
+  useEffect(() => {
+    loadParkingData()
+  }, [])
+
+  // 시간 업데이트 및 자동 새로고침
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date().toLocaleString("ko-KR"))
-    }, 60000)
+      // 주차 데이터도 자동으로 새로고침 (5초마다)
+      loadParkingData()
+    }, 5000)
 
     return () => clearInterval(timer)
   }, [])
+
+  // 통계 계산
+  const totalSpaces = parkingData.zoneA.total + parkingData.zoneB.total
+  const totalOccupied = parkingData.zoneA.occupied + parkingData.zoneB.occupied
+  const totalVehicles = systemStatus?.total_vehicles || totalOccupied
+  const todayEntries = 23 // 이건 아직 API에서 제공하지 않음
 
   return (
     <div className="p-6 pt-20 lg:pt-6 bg-gray-50">
@@ -39,9 +71,16 @@ export default function DashboardPage() {
             <h1 className="text-3xl font-bold text-gray-900 mb-1">안녕하세요, 관리자님!</h1>
             <p className="text-gray-600">스마트 안전 주차장 현황을 확인하세요</p>
           </div>
-          <div className="flex items-center gap-2 mt-4 md:mt-0 text-sm text-gray-500 bg-white px-3 py-1.5 rounded-md border shadow-sm">
-            <Clock className="h-4 w-4" />
-            <span>{currentTime}</span>
+          <div className="flex items-center gap-2 mt-4 md:mt-0">
+            <div className="text-sm text-gray-500 bg-white px-3 py-1.5 rounded-md border shadow-sm flex items-center gap-2">
+              {isLiveData ? (
+                <><Wifi className="h-4 w-4 text-green-600" /> 실시간 연결</>
+              ) : (
+                <><WifiOff className="h-4 w-4 text-red-600" /> 더미 데이터</>
+              )}
+              • <Clock className="h-4 w-4" />
+              <span>{currentTime}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -56,7 +95,7 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="pt-4">
-            <div className="text-3xl font-bold">8</div>
+            <div className="text-3xl font-bold">{totalSpaces}</div>
             <p className="text-xs text-muted-foreground mt-1">A구역 4개, B구역 4개</p>
           </CardContent>
         </Card>
@@ -69,9 +108,15 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="pt-4">
-            <div className="text-3xl font-bold text-indigo-600">5</div>
+            <div className="text-3xl font-bold text-indigo-600">{totalVehicles}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              <span className="text-green-600 font-medium">+2</span> 지난 시간 대비
+              {systemStatus?.vehicle_counts ? (
+                <>
+                  파랑 {systemStatus.vehicle_counts.blue}, 노랑 {systemStatus.vehicle_counts.yellow}, 하양 {systemStatus.vehicle_counts.white}
+                </>
+                             ) : (
+                 <><span className="text-green-600 font-medium">+2</span> 지난 시간 대비</>
+               )}
             </p>
           </CardContent>
         </Card>
@@ -84,7 +129,7 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="pt-4">
-            <div className="text-3xl font-bold text-emerald-600">23</div>
+            <div className="text-3xl font-bold text-emerald-600">{todayEntries}</div>
             <p className="text-xs text-muted-foreground mt-1">차단기 개폐 횟수</p>
           </CardContent>
         </Card>
@@ -97,8 +142,14 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="pt-4">
-            <div className="text-3xl font-bold text-green-600">정상</div>
-            <p className="text-xs text-muted-foreground mt-1">모든 센서 가동 중</p>
+            <div className={`text-3xl font-bold ${
+              systemStatus?.status === 'active' ? 'text-green-600' : 'text-yellow-600'
+            }`}>
+              {systemStatus?.status === 'active' ? '정상' : '대기중'}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {systemStatus ? `${systemStatus.frame_count}프레임 처리됨` : '모든 센서 가동 중'}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -159,8 +210,15 @@ export default function DashboardPage() {
             <div className="flex items-start gap-3 p-3 bg-green-50 rounded-lg border border-green-200 shadow-sm">
               <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
               <div>
-                <p className="font-medium text-green-800">시스템 정상 가동</p>
-                <p className="text-sm text-green-600">모든 카메라와 센서가 정상 작동 중입니다.</p>
+                <p className="font-medium text-green-800">
+                  {systemStatus?.status === 'active' ? '카메라 시스템 정상 가동' : '시스템 정상 가동'}
+                </p>
+                <p className="text-sm text-green-600">
+                  {systemStatus 
+                    ? `카메라 해상도 ${systemStatus.resolution}, ${systemStatus.fps}fps로 모니터링 중`
+                    : '모든 카메라와 센서가 정상 작동 중이다.'
+                  }
+                </p>
                 <p className="text-xs text-green-500 mt-1">5분 전</p>
               </div>
             </div>
@@ -169,19 +227,37 @@ export default function DashboardPage() {
               <Activity className="h-5 w-5 text-blue-600 mt-0.5" />
               <div>
                 <p className="font-medium text-blue-800">주차 공간 확보</p>
-                <p className="text-sm text-blue-600">A구역에 1개의 주차 공간이 확보되었습니다.</p>
+                <p className="text-sm text-blue-600">
+                  {parkingData.zoneA.total - parkingData.zoneA.occupied > 0 
+                    ? `A구역에 ${parkingData.zoneA.total - parkingData.zoneA.occupied}개의 주차 공간이 확보되었다.`
+                    : 'A구역이 모두 차있다.'
+                  }
+                </p>
                 <p className="text-xs text-blue-500 mt-1">15분 전</p>
               </div>
             </div>
 
-            <div className="flex items-start gap-3 p-3 bg-amber-50 rounded-lg border border-amber-200 shadow-sm">
-              <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
-              <div>
-                <p className="font-medium text-amber-800">정기 점검 예정</p>
-                <p className="text-sm text-amber-600">내일 오전 2시 시스템 정기 점검이 예정되어 있습니다.</p>
-                <p className="text-xs text-amber-500 mt-1">1시간 전</p>
+            {systemStatus?.active_warnings && systemStatus.active_warnings > 0 ? (
+              <div className="flex items-start gap-3 p-3 bg-red-50 rounded-lg border border-red-200 shadow-sm">
+                <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5" />
+                <div>
+                  <p className="font-medium text-red-800">경고 상황 발생</p>
+                  <p className="text-sm text-red-600">
+                    {systemStatus.active_warnings}개의 경고 상황이 감지되었다.
+                  </p>
+                  <p className="text-xs text-red-500 mt-1">방금 전</p>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex items-start gap-3 p-3 bg-amber-50 rounded-lg border border-amber-200 shadow-sm">
+                <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
+                <div>
+                  <p className="font-medium text-amber-800">정기 점검 예정</p>
+                  <p className="text-sm text-amber-600">내일 오전 2시 시스템 정기 점검이 예정되어 있다.</p>
+                  <p className="text-xs text-amber-500 mt-1">1시간 전</p>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -189,8 +265,18 @@ export default function DashboardPage() {
       {/* 주차 구역 현황 */}
       <Card className="border shadow-md overflow-hidden">
         <CardHeader className="border-b bg-gradient-to-r from-gray-50 to-gray-100">
-          <CardTitle>주차 구역별 현황</CardTitle>
-          <CardDescription>각 구역별 실시간 주차 현황 (총 8개 공간)</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>주차 구역별 현황</CardTitle>
+              <CardDescription>각 구역별 실시간 주차 현황 (총 8개 공간)</CardDescription>
+            </div>
+            <Badge 
+              variant={isLiveData ? "default" : "secondary"} 
+              className={`${isLiveData ? "bg-green-600" : "bg-gray-600"} text-white`}
+            >
+              {isLiveData ? "실시간" : "더미"}
+            </Badge>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x">
@@ -225,7 +311,7 @@ export default function DashboardPage() {
                   />
                 </div>
 
-                {/* 개별 주차공간 표시 - 비정형적 레이아웃 */}
+                {/* 개별 주차공간 표시 */}
                 <div className="grid grid-cols-2 gap-3 mt-4">
                   {parkingData.zoneA.spaces.map((isOccupied, i) => (
                     <div
@@ -278,7 +364,7 @@ export default function DashboardPage() {
                   />
                 </div>
 
-                {/* 개별 주차공간 표시 - 비정형적 레이아웃 */}
+                {/* 개별 주차공간 표시 */}
                 <div className="grid grid-cols-2 gap-3 mt-4">
                   {parkingData.zoneB.spaces.map((isOccupied, i) => (
                     <div
