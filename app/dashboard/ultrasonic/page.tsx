@@ -4,89 +4,52 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Activity, Waves, AlertTriangle, CheckCircle, Settings, RefreshCw } from "lucide-react"
+import { Activity, Waves, AlertTriangle, CheckCircle, Settings, RefreshCw, Wifi, WifiOff } from "lucide-react"
+import { fetchUltrasonicSensors, UltrasonicSensorData } from "@/lib/api"
 
 export default function UltrasonicPage() {
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleString("ko-KR"))
   const [refreshCount, setRefreshCount] = useState(0)
+  const [ultrasonicSensors, setUltrasonicSensors] = useState<UltrasonicSensorData[]>([])
+  const [isLiveData, setIsLiveData] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
-  // 초음파 센서 데이터 - 실제로는 API에서 가져올 것
-  const [ultrasonicSensors, setUltrasonicSensors] = useState([
-    {
-      id: 1,
-      name: "US-01",
-      location: "A구역 입구",
-      distance: 45,
-      status: "normal",
-      zone: "A구역",
-      threshold: 50,
-      battery: 92,
-    },
-    {
-      id: 2,
-      name: "US-02",
-      location: "A구역 내부",
-      distance: 12,
-      status: "occupied",
-      zone: "A구역",
-      threshold: 50,
-      battery: 87,
-    },
-    {
-      id: 3,
-      name: "US-03",
-      location: "B구역 입구",
-      distance: 78,
-      status: "normal",
-      zone: "B구역",
-      threshold: 50,
-      battery: 76,
-    },
-    {
-      id: 4,
-      name: "US-04",
-      location: "B구역 내부",
-      distance: 8,
-      status: "occupied",
-      zone: "B구역",
-      threshold: 50,
-      battery: 65,
-    },
-    {
-      id: 5,
-      name: "US-05",
-      location: "메인 게이트",
-      distance: 156,
-      status: "normal",
-      zone: "입구",
-      threshold: 100,
-      battery: 95,
-    },
-  ])
+  // 센서 데이터 가져오기 함수
+  const loadSensorData = async () => {
+    try {
+      setIsLoading(true)
+      const { sensors, isLiveData: live } = await fetchUltrasonicSensors()
+      setUltrasonicSensors(sensors)
+      setIsLiveData(live)
+    } catch (error) {
+      console.error('센서 데이터 로드 실패:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
-  // 자동 새로고침 시뮬레이션
+  // 컴포넌트 마운트 시 초기 데이터 로드
   useEffect(() => {
-    let timer
+    loadSensorData()
+  }, [])
+
+  // 자동 새로고침
+  useEffect(() => {
+    let timer: NodeJS.Timeout
     if (autoRefresh) {
-      timer = setInterval(() => {
+      timer = setInterval(async () => {
         setCurrentTime(new Date().toLocaleString("ko-KR"))
         setRefreshCount((prev) => prev + 1)
-
-        // 센서 데이터 랜덤 변경 (실제로는 API에서 가져올 것)
-        setUltrasonicSensors((prev) =>
-          prev.map((sensor) => ({
-            ...sensor,
-            distance:
-              sensor.status === "occupied"
-                ? Math.max(5, Math.min(20, sensor.distance + (Math.random() * 6 - 3)))
-                : Math.max(30, Math.min(200, sensor.distance + (Math.random() * 20 - 10))),
-          })),
-        )
+        
+        // 실시간 데이터 가져오기
+        await loadSensorData()
       }, 3000)
     }
 
-    return () => clearInterval(timer)
+    return () => {
+      if (timer) clearInterval(timer)
+    }
   }, [autoRefresh])
 
   const getStatusInfo = (status: string, distance: number, threshold: number) => {
@@ -98,7 +61,7 @@ export default function UltrasonicPage() {
           bgColor: "bg-red-50",
           borderColor: "border-red-200",
           label: "차량 감지",
-          description: `${Math.round(distance)}cm - 차량이 감지되었습니다`,
+          description: `${Math.round(distance)}cm - 차량이 감지되었다`,
         }
       case "normal":
         return {
@@ -130,6 +93,14 @@ export default function UltrasonicPage() {
     }
   }
 
+  // 통계 계산
+  const totalSensors = ultrasonicSensors.length
+  const normalSensors = ultrasonicSensors.filter(s => s.status === 'normal').length
+  const occupiedSensors = ultrasonicSensors.filter(s => s.status === 'occupied')
+  const averageDistance = totalSensors > 0 
+    ? Math.round(ultrasonicSensors.reduce((acc, sensor) => acc + sensor.distance, 0) / totalSensors)
+    : 0
+
   return (
     <div className="p-6 pt-20 lg:pt-6 bg-gray-50">
       <div className="mb-8">
@@ -139,16 +110,22 @@ export default function UltrasonicPage() {
             <p className="text-gray-600">실시간 거리 측정 및 차량 감지 시스템</p>
           </div>
           <div className="flex items-center gap-2 mt-4 md:mt-0">
-            <div className="text-sm text-gray-500 bg-white px-3 py-1.5 rounded-md border shadow-sm">
-              마지막 업데이트: {currentTime}
+            <div className="text-sm text-gray-500 bg-white px-3 py-1.5 rounded-md border shadow-sm flex items-center gap-2">
+              {isLiveData ? (
+                <><Wifi className="h-4 w-4 text-green-600" /> 실시간 연결</>
+              ) : (
+                <><WifiOff className="h-4 w-4 text-red-600" /> 더미 데이터</>
+              )}
+              • 마지막 업데이트: {currentTime}
             </div>
             <Button
               variant={autoRefresh ? "default" : "outline"}
               size="sm"
               onClick={() => setAutoRefresh(!autoRefresh)}
               className={autoRefresh ? "bg-blue-600 hover:bg-blue-700" : ""}
+              disabled={isLoading}
             >
-              <RefreshCw className={`h-4 w-4 mr-2 ${autoRefresh ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-4 w-4 mr-2 ${autoRefresh || isLoading ? "animate-spin" : ""}`} />
               {autoRefresh ? "자동 새로고침 중" : "자동 새로고침"}
             </Button>
             <Button variant="outline" size="sm">
@@ -169,7 +146,7 @@ export default function UltrasonicPage() {
             </div>
           </CardHeader>
           <CardContent className="pt-4">
-            <div className="text-3xl font-bold">5</div>
+            <div className="text-3xl font-bold">{totalSensors}</div>
             <p className="text-xs text-muted-foreground mt-1">초음파 센서</p>
           </CardContent>
         </Card>
@@ -182,8 +159,10 @@ export default function UltrasonicPage() {
             </div>
           </CardHeader>
           <CardContent className="pt-4">
-            <div className="text-3xl font-bold text-green-600">5</div>
-            <p className="text-xs text-muted-foreground mt-1">모든 센서 정상</p>
+            <div className="text-3xl font-bold text-green-600">{normalSensors}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {normalSensors === totalSensors ? "모든 센서 정상" : `${normalSensors}/${totalSensors} 정상`}
+            </p>
           </CardContent>
         </Card>
 
@@ -195,8 +174,13 @@ export default function UltrasonicPage() {
             </div>
           </CardHeader>
           <CardContent className="pt-4">
-            <div className="text-3xl font-bold text-red-600">2</div>
-            <p className="text-xs text-muted-foreground mt-1">US-02, US-04</p>
+            <div className="text-3xl font-bold text-red-600">{occupiedSensors.length}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {occupiedSensors.length > 0 
+                ? occupiedSensors.map(s => s.name).join(', ')
+                : '감지된 차량 없음'
+              }
+            </p>
           </CardContent>
         </Card>
 
@@ -208,12 +192,7 @@ export default function UltrasonicPage() {
             </div>
           </CardHeader>
           <CardContent className="pt-4">
-            <div className="text-3xl font-bold text-blue-600">
-              {Math.round(
-                ultrasonicSensors.reduce((acc, sensor) => acc + sensor.distance, 0) / ultrasonicSensors.length,
-              )}
-              cm
-            </div>
+            <div className="text-3xl font-bold text-blue-600">{averageDistance}cm</div>
             <p className="text-xs text-muted-foreground mt-1">전체 센서 평균</p>
           </CardContent>
         </Card>
@@ -262,7 +241,7 @@ export default function UltrasonicPage() {
                   <p className={`text-sm ${statusInfo.textColor}`}>{statusInfo.description}</p>
                 </div>
 
-                {/* 거리 시각화 - 더 인간적인 디자인 */}
+                {/* 거리 시각화 */}
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm text-gray-600">
                     <span>거리 표시</span>
@@ -294,7 +273,7 @@ export default function UltrasonicPage() {
                   </div>
                 </div>
 
-                {/* 센서 상태 정보 - 배터리 추가 */}
+                {/* 센서 상태 정보 */}
                 <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="text-gray-600">상태:</span>
@@ -303,20 +282,6 @@ export default function UltrasonicPage() {
                   <div>
                     <span className="text-gray-600">임계값:</span>
                     <span className="ml-2 font-medium">{sensor.threshold}cm</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">배터리:</span>
-                    <div className="inline-flex items-center ml-2">
-                      <div className="w-12 h-3 bg-gray-200 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full ${
-                            sensor.battery > 70 ? "bg-green-500" : sensor.battery > 30 ? "bg-yellow-500" : "bg-red-500"
-                          }`}
-                          style={{ width: `${sensor.battery}%` }}
-                        ></div>
-                      </div>
-                      <span className="ml-1 font-medium">{sensor.battery}%</span>
-                    </div>
                   </div>
                   <div>
                     <span className="text-gray-600">ID:</span>
@@ -337,9 +302,17 @@ export default function UltrasonicPage() {
               <CardTitle>실시간 거리 측정 그래프</CardTitle>
               <CardDescription>지난 1시간 동안의 센서별 거리 변화</CardDescription>
             </div>
-            <Badge variant="outline" className="bg-white">
-              새로고침 횟수: {refreshCount}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="bg-white">
+                새로고침 횟수: {refreshCount}
+              </Badge>
+              <Badge 
+                variant={isLiveData ? "default" : "secondary"} 
+                className={isLiveData ? "bg-green-600" : "bg-gray-600"}
+              >
+                {isLiveData ? "실시간" : "더미"}
+              </Badge>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="pt-6">
@@ -348,8 +321,14 @@ export default function UltrasonicPage() {
               <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p className="text-lg font-medium">실시간 차트</p>
               <p className="text-sm">센서 데이터 시각화 영역</p>
-              <Button variant="outline" size="sm" className="mt-4">
-                <RefreshCw className="h-4 w-4 mr-2" />
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="mt-4"
+                onClick={loadSensorData}
+                disabled={isLoading}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
                 데이터 로드
               </Button>
             </div>
