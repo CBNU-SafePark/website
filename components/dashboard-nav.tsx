@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Car, Camera, BarChart3, LogOut, Menu, X, Home, Thermometer, Activity, User } from "lucide-react"
+import { NotificationBell } from "@/components/notification-bell"
 
 const navigation = [
   { name: "대시보드", href: "/dashboard", icon: Home },
@@ -33,9 +34,12 @@ export function DashboardNav() {
             <Car className="h-6 w-6 text-blue-600" />
             <span className="font-semibold text-gray-900">스마트 주차장</span>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)}>
-            {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </Button>
+          <div className="flex items-center gap-1">
+            <NotificationBell />
+            <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)}>
+              {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -47,14 +51,17 @@ export function DashboardNav() {
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center gap-2 px-6 py-5 border-b border-gray-200">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Car className="h-6 w-6 text-blue-600" />
+          <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Car className="h-6 w-6 text-blue-600" />
+              </div>
+              <div>
+                <h1 className="font-bold text-gray-900">스마트 주차장</h1>
+                <p className="text-xs text-gray-500">관리자 시스템 v1.0</p>
+              </div>
             </div>
-            <div>
-              <h1 className="font-bold text-gray-900">스마트 주차장</h1>
-              <p className="text-xs text-gray-500">관리자 시스템 v1.0</p>
-            </div>
+            <NotificationBell />
           </div>
 
           {/* User info */}

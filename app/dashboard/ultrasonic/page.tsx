@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Activity, Waves, AlertTriangle, CheckCircle, Settings, RefreshCw, Wifi, WifiOff } from "lucide-react"
 import { fetchUltrasonicSensors, UltrasonicSensorData } from "@/lib/api"
+import { PageHeader } from "@/components/page-header"
 
 export default function UltrasonicPage() {
   const [autoRefresh, setAutoRefresh] = useState(true)
@@ -103,7 +104,11 @@ export default function UltrasonicPage() {
 
   return (
     <div className="p-6 pt-20 lg:pt-6 bg-gray-50">
-      <div className="mb-8">
+      <PageHeader 
+        title="초음파 센서 모니터링" 
+        description="실시간 거리 측정 및 차량 감지 시스템" 
+      />
+      <div className="mb-8 lg:mb-0">
         <div className="flex flex-col md:flex-row md:items-end md:justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-1">초음파 센서 모니터링</h1>

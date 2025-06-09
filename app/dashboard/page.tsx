@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Car, Users, AlertTriangle, CheckCircle, Thermometer, Droplets, Activity, Clock, Wifi, WifiOff } from "lucide-react"
 import { useState, useEffect } from "react"
 import { fetchParkingData, ParkingSystemStatus } from "@/lib/api"
+import { PageHeader } from "@/components/page-header"
 
 export default function DashboardPage() {
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleString("ko-KR"))
@@ -65,7 +66,11 @@ export default function DashboardPage() {
 
   return (
     <div className="p-6 pt-20 lg:pt-6 bg-gray-50">
-      <div className="mb-8">
+      <PageHeader 
+        title="안녕하세요, 관리자님!" 
+        description="스마트 안전 주차장 현황을 확인하세요" 
+      />
+      <div className="mb-8 lg:mb-0">
         <div className="flex flex-col md:flex-row md:items-end md:justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-1">안녕하세요, 관리자님!</h1>
